@@ -82,7 +82,7 @@ if query and file_path and docs_path:
         relevant_docs = retriever.get_relevant_documents(query)
 
         # Build context from relevant chunks
-        context = " ".join(relevant_docs)
+        context = " ".join([doc for doc in relevant_docs])
 
         # Answer the query using QA pipeline
         result = qa_pipeline(question=query, context=context)
