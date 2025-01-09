@@ -35,9 +35,18 @@ if process_url_clicked:
     text_splitter = RecursiveCharacterTextSplitter(separators=['\n\n', '\n', '.', ','], chunk_size=1000)
     docs = text_splitter.split_documents(data)
 
+    st.write(docs[:3])  # Optional: Uncomment to inspect the structure of docs
+
     # Create embeddings
     st.info("Creating embeddings... Please wait!")
-    docs_embeddings = [embedding_model.encode(doc.content) for doc in docs]
+    if isinstance(docs[0], str):  # If docs are plain strings
+        docs_embeddings = [embedding_model.encode(doc) for doc in docs]
+    elif hasattr(docs[0], 'page_content'):  # If docs have a page_content attribute
+        docs_embeddings = [embedding_model.encode(doc.page_content) for doc in docs]
+    else:
+        st.error("Unsupported document structure. Please check the input data.")
+        st.stop()
+        
     vectorstore = FAISS.from_documents(docs, embedding_model)
 
     # Save FAISS index
