@@ -1,94 +1,84 @@
 import streamlit as st
-import pickle
-from transformers import pipeline
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from transformers import pipeline, AutoTokenizer
 from langchain.vectorstores import FAISS
-from langchain_community.document_loaders import UnstructuredURLLoader
 from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from bs4 import BeautifulSoup
+import requests
+import pickle
 
-# Title and Sidebar
-st.title("MHU: News Research Tool 📈")
-st.sidebar.title("News Article URLs")
-
-# Initialize Hugging Face models
+# Initialize QA model and embeddings
+st.title("MHU QA System with URL Text Retrieval ")
+qa_pipeline = pipeline("question-answering", model="distilbert-base-uncased-distilled-squad")
 embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-qa_pipeline = pipeline("question-answering", model="deepset/roberta-base-squad2")
 
-# Input URLs
-urls = []
-for i in range(3):
-    url = st.sidebar.text_input(f"URL {i+1}")
-    urls.append(url)
+# Initialize file paths
+vector_store_path = "vectorstore.pkl"
+docs_path = "docs.pkl"
 
-process_url_clicked = st.sidebar.button("Process URLs")
-file_path = "faiss_store.pkl"
-docs_path = "docs.pkl"  # Path to save the processed documents
-
-def clean_text(text):
-    """Clean and preprocess text."""
-    return text.replace("\n", " ").strip()
-
-if process_url_clicked:
-    # Load data from URLs
-    st.info("Loading data from URLs... Please wait!")
+# Extract text from URL
+def extract_text_from_url(url):
     try:
-        loader = UnstructuredURLLoader(urls=urls)
-        data = loader.load()
+        response = requests.get(url)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Remove scripts and styles
+        for script in soup(["script", "style"]):
+            script.extract()
+
+        # Extract visible text
+        text = soup.get_text(separator="\n").strip()
+        return text
     except Exception as e:
-        st.error(f"Error loading URLs: {e}")
-        st.stop()
+        st.error(f"Error extracting text: {e}")
+        return None
 
-    # Split data into smaller chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        separators=['\n\n', '\n', '.', ','],
-        chunk_size=500,  # Smaller chunks for better context
-        chunk_overlap=100  # Overlap to retain context across chunks
-    )
-    docs = text_splitter.split_documents(data)
+# Sidebar for URL input
+st.sidebar.title("URL Input")
+url = st.sidebar.text_input("Enter a URL to process:")
 
-    # Clean the document text
-    cleaned_docs = [
-        clean_text(doc.page_content if hasattr(doc, 'page_content') else doc) for doc in docs
-    ]
+if url:
+    st.info("Extracting and processing text...")
+    context = extract_text_from_url(url)
+    if context:
+        # Split the text into smaller chunks
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        docs = text_splitter.create_documents([context])
 
-    # Save the docs to a file for later use
-    with open(docs_path, "wb") as f:
-        pickle.dump(cleaned_docs, f)
+        # Embed the text chunks
+        vectorstore = FAISS.from_documents(docs, embedding_model)
 
-    # Debugging: Check the structure of docs
-    st.write(cleaned_docs[:3])  # Optional: Uncomment to inspect the structure of docs
+        # Save the vector store and docs for later queries
+        with open(vector_store_path, "wb") as f:
+            pickle.dump(vectorstore, f)
+        with open(docs_path, "wb") as f:
+            pickle.dump(docs, f)
 
-    # Create FAISS vector store
-    st.info("Creating embeddings... Please wait!")
-    vectorstore = FAISS.from_texts(cleaned_docs, embedding_model)
+        st.success("Text processed and stored for fast retrieval!")
 
-    # Save FAISS index
-    with open(file_path, "wb") as f:
-        pickle.dump(vectorstore, f)
-    st.success("Data processed and embeddings saved!")
+# Question Answering
+st.subheader("Ask Questions")
+question = st.text_input("Enter your question:")
 
-# Question Input
-query = st.text_input("Ask a question about the content:")
-if query and file_path and docs_path:
+if question:
     try:
-        # Load saved FAISS index and documents
-        with open(file_path, "rb") as f:
+        # Load vector store and documents
+        with open(vector_store_path, "rb") as f:
             vectorstore = pickle.load(f)
         with open(docs_path, "rb") as f:
             docs = pickle.load(f)
 
         # Retrieve top-k relevant chunks
-        retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
-        relevant_docs = retriever.get_relevant_documents(query)
+        retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+        relevant_docs = retriever.get_relevant_documents(question)
 
-        # Build context from relevant chunks
-        context = " ".join([doc for doc in relevant_docs])
+        # Combine relevant chunks into context
+        context = " ".join([doc.page_content for doc in relevant_docs])
 
-        # Answer the query using QA pipeline
-        result = qa_pipeline(question=query, context=context)
-
-        # Display the answer
+        # Use the QA model
+        result = qa_pipeline(question=question, context=context)
         st.header("Answer")
         st.write(result["answer"])
     except Exception as e:
-        st.error(f"Error processing the query: {e}")
+        st.error(f"Error processing the question: {e}")
