@@ -4,4 +4,8 @@ transformers
 langchain
 langchain-community
 faiss-cpu
+unstructured[standard]
+pdf2image
+python-magic
+requests
 pickle-mixin
