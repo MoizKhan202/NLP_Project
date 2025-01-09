@@ -1,10 +1,18 @@
+# Streamlit for the web interface
 streamlit
+
+# Hugging Face Transformers for QA and embeddings
 transformers
 sentence-transformers
+
+# LangChain for text splitting and FAISS vector store
 langchain
-langchain-community
+
+# FAISS for efficient similarity search
 faiss-cpu
-unstructured[standard]
-pdf2image
-python-magic
+
+# BeautifulSoup for text extraction
+beautifulsoup4
+
+# Requests for fetching URL content
 requests
