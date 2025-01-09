@@ -46,7 +46,7 @@ if process_url_clicked:
         pickle.dump(docs, f)
 
     # Debugging: Check the structure of docs
-    st.write(docs[:3])  # Optional: Uncomment to inspect the structure of docs
+    #st.write(docs[:3])  # Optional: Uncomment to inspect the structure of docs
 
     # Create FAISS vector store
     st.info("Creating embeddings... Please wait!")
