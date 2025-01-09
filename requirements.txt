@@ -1,0 +1,7 @@
+streamlit
+sentence-transformers
+transformers
+langchain
+langchain-community
+faiss-cpu
+pickle-mixin
