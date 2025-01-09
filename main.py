@@ -12,7 +12,7 @@ st.sidebar.title("News Article URLs")
 
 # Initialize Hugging Face models
 embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-qa_pipeline = pipeline("question-answering", model="distilbert-base-uncased")
+qa_pipeline = pipeline("question-answering", model="deepset/roberta-base-squad2")
 
 # Input URLs
 urls = []
@@ -23,6 +23,10 @@ for i in range(3):
 process_url_clicked = st.sidebar.button("Process URLs")
 file_path = "faiss_store.pkl"
 docs_path = "docs.pkl"  # Path to save the processed documents
+
+def clean_text(text):
+    """Clean and preprocess text."""
+    return text.replace("\n", " ").strip()
 
 if process_url_clicked:
     # Load data from URLs
@@ -37,20 +41,26 @@ if process_url_clicked:
     # Split data into smaller chunks
     text_splitter = RecursiveCharacterTextSplitter(
         separators=['\n\n', '\n', '.', ','],
-        chunk_size=1000
+        chunk_size=500,  # Smaller chunks for better context
+        chunk_overlap=100  # Overlap to retain context across chunks
     )
     docs = text_splitter.split_documents(data)
 
+    # Clean the document text
+    cleaned_docs = [
+        clean_text(doc.page_content if hasattr(doc, 'page_content') else doc) for doc in docs
+    ]
+
     # Save the docs to a file for later use
     with open(docs_path, "wb") as f:
-        pickle.dump(docs, f)
+        pickle.dump(cleaned_docs, f)
 
     # Debugging: Check the structure of docs
-    #st.write(docs[:3])  # Optional: Uncomment to inspect the structure of docs
+    st.write(cleaned_docs[:3])  # Optional: Uncomment to inspect the structure of docs
 
     # Create FAISS vector store
     st.info("Creating embeddings... Please wait!")
-    vectorstore = FAISS.from_documents(docs, embedding_model)
+    vectorstore = FAISS.from_texts(cleaned_docs, embedding_model)
 
     # Save FAISS index
     with open(file_path, "wb") as f:
@@ -67,8 +77,14 @@ if query and file_path and docs_path:
         with open(docs_path, "rb") as f:
             docs = pickle.load(f)
 
-        # Retrieve context and answer the query
-        context = " ".join([doc.page_content if hasattr(doc, 'page_content') else doc for doc in docs])
+        # Retrieve top-k relevant chunks
+        retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+        relevant_docs = retriever.get_relevant_documents(query)
+
+        # Build context from relevant chunks
+        context = " ".join(relevant_docs)
+
+        # Answer the query using QA pipeline
         result = qa_pipeline(question=query, context=context)
 
         # Display the answer
