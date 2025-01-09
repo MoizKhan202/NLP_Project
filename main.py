@@ -22,6 +22,7 @@ for i in range(3):
 
 process_url_clicked = st.sidebar.button("Process URLs")
 file_path = "faiss_store.pkl"
+docs_path = "docs.pkl"  # Path to save the processed documents
 
 if process_url_clicked:
     # Load data from URLs
@@ -40,6 +41,10 @@ if process_url_clicked:
     )
     docs = text_splitter.split_documents(data)
 
+    # Save the docs to a file for later use
+    with open(docs_path, "wb") as f:
+        pickle.dump(docs, f)
+
     # Debugging: Check the structure of docs
     st.write(docs[:3])  # Optional: Uncomment to inspect the structure of docs
 
@@ -54,10 +59,13 @@ if process_url_clicked:
 
 # Question Input
 query = st.text_input("Ask a question about the content:")
-if query and file_path:
+if query and file_path and docs_path:
     try:
+        # Load saved FAISS index and documents
         with open(file_path, "rb") as f:
             vectorstore = pickle.load(f)
+        with open(docs_path, "rb") as f:
+            docs = pickle.load(f)
 
         # Retrieve context and answer the query
         context = " ".join([doc.page_content if hasattr(doc, 'page_content') else doc for doc in docs])
