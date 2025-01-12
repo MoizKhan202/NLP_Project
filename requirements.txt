@@ -13,6 +13,17 @@ faiss-cpu
 
 # BeautifulSoup for text extraction
 beautifulsoup4
+# Core dependencies
+streamlit
+transformers
+sentence-transformers
+beautifulsoup4
+requests
 
+# LangChain for vector stores and text splitting
+langchain==0.0.208
+
+# FAISS for similarity search
+faiss-cpu
 # Requests for fetching URL content
 requests
